@@ -25,9 +25,16 @@ type HaproxyStatsClient struct {
 type HaproxyStats []HaproxyStat
 
 type HaproxyStat struct {
-	ProxyName            string `csv:"pxname"`
+	// Common metrics
+	ProxyName        string `csv:"pxname"`
+	CurrentSessions  uint64 `csv:"scur"`
+	Type             uint64 `csv:"type"`
+	BytesIn          uint64 `csv:"bin"`
+	BytesOut         uint64 `csv:"bout"`
+	MaxSessionPerSec uint64 `csv:"rate_max"`
+
+	// Only Backend metrics
 	CurrentQueued        uint64 `csv:"qcur"`
-	CurrentSessions      uint64 `csv:"scur"`
 	ErrorConnecting      uint64 `csv:"econ"`
 	AverageQueueTimeMs   uint64 `csv:"qtime"`
 	AverageConnectTimeMs uint64 `csv:"ctime"`
@@ -104,6 +111,7 @@ func readCsv(logger lager.Logger, buffer []byte) HaproxyStats {
 			// skip header line
 			continue
 		}
+
 		stats = append(stats, csvToHaproxyStat(line))
 	}
 	return stats
@@ -114,7 +122,11 @@ func csvToHaproxyStat(row []string) HaproxyStat {
 		ProxyName:            row[0],
 		CurrentQueued:        convertToInt(row[2]),
 		CurrentSessions:      convertToInt(row[4]),
+		BytesIn:              convertToInt(row[8]),
+		BytesOut:             convertToInt(row[9]),
 		ErrorConnecting:      convertToInt(row[13]),
+		Type:                 convertToInt(row[32]),
+		MaxSessionPerSec:     convertToInt(row[35]),
 		AverageQueueTimeMs:   convertToInt(row[58]),
 		AverageConnectTimeMs: convertToInt(row[59]),
 		AverageSessionTimeMs: convertToInt(row[61]),

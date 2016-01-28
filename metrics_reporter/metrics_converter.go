@@ -9,55 +9,57 @@ import (
 	"github.com/cloudfoundry-incubator/cf-tcp-router/models"
 )
 
-func Convert(proxyStats haproxy_client.HaproxyStats) *MetricsReport {
+func Convert(proxyStats haproxy_client.HaproxyStats) *HaProxyMetricsReport {
 
 	if len(proxyStats) == 0 {
 		return nil
 	}
 
-	var (
-		totalCurrentQueuedRequests   uint64
-		totalBackendConnectionErrors uint64
-		averageQueueTimeMs           uint64
-		averageConnectTimeMs         uint64
-		totalQueueTimeMs             uint64
-		totalConnectTimeMs           uint64
-		proxyStatsMap                map[models.RoutingKey]ProxyStats
-	)
+	frontendMetricsReport := MetricsReport{ProxyMetrics: make(map[models.RoutingKey]ProxyStats)}
+	backendMetricsReport := MetricsReport{ProxyMetrics: make(map[models.RoutingKey]ProxyStats)}
 
-	proxyStatsMap = map[models.RoutingKey]ProxyStats{}
-
-	length := uint64(len(proxyStats))
+	var frontendCount, backendCount uint64
 
 	for _, proxyStat := range proxyStats {
-		totalCurrentQueuedRequests += proxyStat.CurrentQueued
-		totalBackendConnectionErrors += proxyStat.ErrorConnecting
-		totalConnectTimeMs += proxyStat.AverageConnectTimeMs
-		totalQueueTimeMs += proxyStat.AverageQueueTimeMs
+		switch proxyStat.Type {
+		case 0:
+			frontendCount++
+			frontendMetricsReport.BytesIn += proxyStat.BytesIn
+			frontendMetricsReport.BytesOut += proxyStat.BytesOut
+			frontendMetricsReport.MaxSessionPerSec += proxyStat.MaxSessionPerSec
+			populateProxyStats(proxyStat, frontendMetricsReport.ProxyMetrics)
 
-		populateProxyStats(proxyStat, proxyStatsMap)
+		case 1:
+			backendCount++
+			backendMetricsReport.BytesIn += proxyStat.BytesIn
+			backendMetricsReport.BytesOut += proxyStat.BytesOut
+			backendMetricsReport.MaxSessionPerSec += proxyStat.MaxSessionPerSec
+			backendMetricsReport.TotalCurrentQueuedRequests += proxyStat.CurrentQueued
+			backendMetricsReport.TotalBackendConnectionErrors += proxyStat.ErrorConnecting
+			backendMetricsReport.AverageQueueTimeMs += proxyStat.AverageQueueTimeMs
+			backendMetricsReport.AverageConnectTimeMs += proxyStat.AverageConnectTimeMs
+			backendMetricsReport.AverageSessionTimeMs += proxyStat.AverageSessionTimeMs
+			populateProxyStats(proxyStat, backendMetricsReport.ProxyMetrics)
+
+		}
 	}
-	averageQueueTimeMs = totalQueueTimeMs / length
-	averageConnectTimeMs = totalConnectTimeMs / length
+	backendMetricsReport.AverageQueueTimeMs = backendMetricsReport.AverageQueueTimeMs / backendCount
+	backendMetricsReport.AverageConnectTimeMs = backendMetricsReport.AverageConnectTimeMs / backendCount
+	backendMetricsReport.AverageSessionTimeMs = backendMetricsReport.AverageSessionTimeMs / backendCount
 
-	return &MetricsReport{
-		TotalCurrentQueuedRequests:   totalCurrentQueuedRequests,
-		TotalBackendConnectionErrors: totalBackendConnectionErrors,
-		AverageQueueTimeMs:           averageQueueTimeMs,
-		AverageConnectTimeMs:         averageConnectTimeMs,
-		ProxyMetrics:                 proxyStatsMap,
+	return &HaProxyMetricsReport{
+		FrontendMetrics: &frontendMetricsReport,
+		BackendMetrics:  &backendMetricsReport,
 	}
 }
 
 func populateProxyStats(proxyStat haproxy_client.HaproxyStat, proxyStatsMap map[models.RoutingKey]ProxyStats) {
 	key, err := proxyKey(proxyStat.ProxyName)
 	if err == nil {
-		if _, ok := proxyStatsMap[key]; !ok {
-			proxyStatsMap[key] = ProxyStats{}
-		}
-		v, _ := proxyStatsMap[key]
-		v.ConnectionTime += proxyStat.AverageConnectTimeMs
-		v.CurrentSessions += proxyStat.CurrentSessions
+		v := ProxyStats{}
+		v.ConnectionTime = proxyStat.AverageConnectTimeMs
+		v.CurrentSessions = proxyStat.CurrentSessions
+		v.MaxSessionPerSec = proxyStat.MaxSessionPerSec
 		proxyStatsMap[key] = v
 	}
 }

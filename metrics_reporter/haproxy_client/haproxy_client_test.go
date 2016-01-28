@@ -80,7 +80,7 @@ var _ = Describe("HaproxyClient", func() {
 				Eventually(readyChannel).Should(BeClosed())
 			})
 
-			It("returns haproxy statistics", func() {
+			It("returns statistics only for frontend and backend", func() {
 				stats := haproxyClient.GetStats()
 				Expect(stats).Should(HaveLen(9))
 
@@ -92,6 +92,7 @@ var _ = Describe("HaproxyClient", func() {
 					AverageQueueTimeMs:   103,
 					AverageConnectTimeMs: 104,
 					AverageSessionTimeMs: 105,
+					Type:                 0,
 				}
 
 				r8 := haproxy_client.HaproxyStat{
@@ -102,6 +103,7 @@ var _ = Describe("HaproxyClient", func() {
 					AverageQueueTimeMs:   1003,
 					AverageConnectTimeMs: 1004,
 					AverageSessionTimeMs: 1005,
+					Type:                 1,
 				}
 
 				Expect(stats[0]).Should(Equal(r0))

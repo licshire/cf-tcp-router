@@ -11,7 +11,7 @@ import (
 var _ = Describe("Metrics Converter", func() {
 	var (
 		stats   haproxy_client.HaproxyStats
-		metrics *metrics_reporter.MetricsReport
+		metrics *metrics_reporter.HaProxyMetricsReport
 	)
 
 	Context("Convert", func() {
@@ -25,6 +25,25 @@ var _ = Describe("Metrics Converter", func() {
 						AverageConnectTimeMs: 25,
 						CurrentSessions:      15,
 						AverageSessionTimeMs: 9,
+						Type:                 0,
+					},
+					{ProxyName: "fake_pxname1_9000",
+						CurrentQueued:        10,
+						ErrorConnecting:      20,
+						AverageQueueTimeMs:   30,
+						AverageConnectTimeMs: 25,
+						CurrentSessions:      15,
+						AverageSessionTimeMs: 9,
+						Type:                 1,
+					},
+					{ProxyName: "fake_pxname1_9000",
+						CurrentQueued:        10,
+						ErrorConnecting:      20,
+						AverageQueueTimeMs:   30,
+						AverageConnectTimeMs: 25,
+						CurrentSessions:      15,
+						AverageSessionTimeMs: 9,
+						Type:                 2,
 					},
 					{ProxyName: "fake_pxname2_9001",
 						CurrentQueued:        20,
@@ -33,13 +52,32 @@ var _ = Describe("Metrics Converter", func() {
 						AverageConnectTimeMs: 40,
 						CurrentSessions:      15,
 						AverageSessionTimeMs: 9,
+						Type:                 0,
+					},
+					{ProxyName: "fake_pxname2_9001",
+						CurrentQueued:        20,
+						ErrorConnecting:      20,
+						AverageQueueTimeMs:   0,
+						AverageConnectTimeMs: 40,
+						CurrentSessions:      15,
+						AverageSessionTimeMs: 9,
+						Type:                 1,
+					},
+					{ProxyName: "fake_pxname2_9001",
+						CurrentQueued:        20,
+						ErrorConnecting:      20,
+						AverageQueueTimeMs:   0,
+						AverageConnectTimeMs: 40,
+						CurrentSessions:      15,
+						AverageSessionTimeMs: 9,
+						Type:                 2,
 					},
 				}
 				metrics = metrics_reporter.Convert(stats)
 			})
 
 			It("aggregates CurrentQueued", func() {
-				Expect(metrics.TotalCurrentQueuedRequests).To(Equal(uint64(30)))
+				Expect(metrics.BackendMetrics.TotalCurrentQueuedRequests).To(Equal(uint64(30)))
 			})
 
 			It("aggregates BackendErrors", func() {

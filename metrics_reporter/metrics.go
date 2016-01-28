@@ -2,26 +2,26 @@ package metrics_reporter
 
 import "github.com/cloudfoundry/dropsonde/metrics"
 
-type Value string
+type PrefixedValue string
 
-func (name Value) Send(value uint64) {
-	metrics.SendValue(string(name), float64(value), "Metric")
+func (name PrefixedValue) Send(prefix string, value uint64) {
+	metrics.SendValue(prefix+"."+string(name), float64(value), "Metric")
 }
 
-type ProxyValue string
+type PrefixedDurationMs string
 
-func (name ProxyValue) Send(proxyName string, value uint64) {
-	metrics.SendValue(proxyName+"."+string(name), float64(value), "Metric")
+func (name PrefixedDurationMs) Send(prefix string, duration uint64) {
+	metrics.SendValue(prefix+"."+string(name), float64(duration), "ms")
 }
 
-type ProxyDurationMs string
+type PrefixedValueByPort string
 
-func (name ProxyDurationMs) Send(proxyName string, duration uint64) {
-	metrics.SendValue(proxyName+"."+string(name), float64(duration), "ms")
+func (name PrefixedValueByPort) Send(prefix string, port string, value uint64) {
+	metrics.SendValue(prefix+"."+port+"."+string(name), float64(value), "Metric")
 }
 
-type DurationMs string
+type PrefixedDurationMsByPort string
 
-func (name DurationMs) Send(duration uint64) {
-	metrics.SendValue(string(name), float64(duration), "ms")
+func (name PrefixedDurationMsByPort) Send(prefix string, port string, duration uint64) {
+	metrics.SendValue(prefix+"."+port+"."+string(name), float64(duration), "ms")
 }

@@ -8,17 +8,17 @@ import (
 )
 
 type FakeMetricsEmitter struct {
-	EmitStub        func(*metrics_reporter.MetricsReport)
+	EmitStub        func(*metrics_reporter.HaProxyMetricsReport)
 	emitMutex       sync.RWMutex
 	emitArgsForCall []struct {
-		arg1 *metrics_reporter.MetricsReport
+		arg1 *metrics_reporter.HaProxyMetricsReport
 	}
 }
 
-func (fake *FakeMetricsEmitter) Emit(arg1 *metrics_reporter.MetricsReport) {
+func (fake *FakeMetricsEmitter) Emit(arg1 *metrics_reporter.HaProxyMetricsReport) {
 	fake.emitMutex.Lock()
 	fake.emitArgsForCall = append(fake.emitArgsForCall, struct {
-		arg1 *metrics_reporter.MetricsReport
+		arg1 *metrics_reporter.HaProxyMetricsReport
 	}{arg1})
 	fake.emitMutex.Unlock()
 	if fake.EmitStub != nil {
@@ -32,7 +32,7 @@ func (fake *FakeMetricsEmitter) EmitCallCount() int {
 	return len(fake.emitArgsForCall)
 }
 
-func (fake *FakeMetricsEmitter) EmitArgsForCall(i int) *metrics_reporter.MetricsReport {
+func (fake *FakeMetricsEmitter) EmitArgsForCall(i int) *metrics_reporter.HaProxyMetricsReport {
 	fake.emitMutex.RLock()
 	defer fake.emitMutex.RUnlock()
 	return fake.emitArgsForCall[i].arg1

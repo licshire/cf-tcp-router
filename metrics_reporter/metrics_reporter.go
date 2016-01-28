@@ -9,17 +9,34 @@ import (
 	"github.com/pivotal-golang/clock"
 )
 
+type HaProxyMetricsReport struct {
+	FrontendMetrics *MetricsReport
+	BackendMetrics  *MetricsReport
+}
+
 type MetricsReport struct {
+	// Common metrics
+	BytesIn          uint64
+	BytesOut         uint64
+	MaxSessionPerSec uint64
+
+	// Only backend
 	TotalCurrentQueuedRequests   uint64
 	TotalBackendConnectionErrors uint64
 	AverageQueueTimeMs           uint64
 	AverageConnectTimeMs         uint64
-	ProxyMetrics                 map[models.RoutingKey]ProxyStats
+	AverageSessionTimeMs         uint64
+
+	ProxyMetrics map[models.RoutingKey]ProxyStats
 }
 
 type ProxyStats struct {
-	ConnectionTime  uint64
-	CurrentSessions uint64
+	// Common metrics
+	CurrentSessions  uint64
+	MaxSessionPerSec uint64
+
+	// Only backend
+	ConnectionTime uint64
 }
 
 type MetricsReporter struct {

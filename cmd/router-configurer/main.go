@@ -104,7 +104,7 @@ var dropsondePort = flag.Int(
 )
 
 const (
-	dropsondeOrigin        = "router-configurer"
+	dropsondeOrigin        = "tcp-router"
 	statsConnectionTimeout = 10 * time.Second
 )
 
