@@ -146,6 +146,8 @@ func (table RoutingTable) UpsertBackendServerKey(key RoutingKey, info BackendSer
 		currentBackendDetails.UpdateSucceededBy(newBackendDetails) {
 		logger.Debug("applying-change-to-table")
 		existingEntry.Backends[newBackendKey] = newBackendDetails
+	} else {
+		logger.Debug("skipping-stale-event")
 	}
 
 	if !backendFound || currentBackendDetails.DifferentFrom(newBackendDetails) {
@@ -174,6 +176,8 @@ func (table RoutingTable) DeleteBackendServerKey(key RoutingKey, info BackendSer
 				delete(table.Entries, key)
 			}
 			return true
+		} else {
+			logger.Debug("skipping-stale-event")
 		}
 	}
 
