@@ -81,7 +81,11 @@ func (h *Configurer) Configure(routingTable models.RoutingTable) error {
 	// only call script if file changed
 	if h.scriptRunner != nil && !bytes.Equal(prev, current) {
 		h.logger.Info("running-script")
-		return h.scriptRunner.Run()
+		err = h.scriptRunner.Run()
+		if err != nil {
+			h.logger.Error("failed-to-run-script", err)
+			return err
+		}
 	}
 	return nil
 }
