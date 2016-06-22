@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"time"
 
 	"github.com/cloudfoundry-incubator/cf-debug-server"
@@ -67,6 +68,12 @@ var configFile = flag.String(
 	"config",
 	"/var/vcap/jobs/router_configurer/config/router_configurer.yml",
 	"The Router configurer yml config.",
+)
+
+var haproxyReloader = flag.String(
+	"haproxyReloader",
+	"/var/vcap/jobs/router_configurer/bin/haproxy_reloader",
+	"Path to a script that reloads HAProxy.",
 )
 
 var syncInterval = flag.Duration(
@@ -134,8 +141,14 @@ func main() {
 	initializeDropsonde(logger)
 
 	routingTable := models.NewRoutingTable(logger)
-	configurer := configurer.NewConfigurer(logger,
-		*tcpLoadBalancer, *tcpLoadBalancerBaseCfg, *tcpLoadBalancerCfg)
+	reloaderCommand := exec.Command(*haproxyReloader)
+	configurer := configurer.NewConfigurer(
+		logger,
+		*tcpLoadBalancer,
+		*tcpLoadBalancerBaseCfg,
+		*tcpLoadBalancerCfg,
+		reloaderCommand,
+	)
 
 	cfg, err := config.New(*configFile)
 	if err != nil {

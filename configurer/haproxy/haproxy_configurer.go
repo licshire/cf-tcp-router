@@ -19,9 +19,10 @@ type Configurer struct {
 	baseConfigFilePath string
 	configFilePath     string
 	configFileLock     *sync.Mutex
+	scriptRunner       ScriptRunner
 }
 
-func NewHaProxyConfigurer(logger lager.Logger, baseConfigFilePath string, configFilePath string) (*Configurer, error) {
+func NewHaProxyConfigurer(logger lager.Logger, baseConfigFilePath string, configFilePath string, scriptRunner ScriptRunner) (*Configurer, error) {
 	if !utils.FileExists(baseConfigFilePath) {
 		return nil, fmt.Errorf("%s: [%s]", cf_tcp_router.ErrRouterConfigFileNotFound, baseConfigFilePath)
 	}
@@ -33,6 +34,7 @@ func NewHaProxyConfigurer(logger lager.Logger, baseConfigFilePath string, config
 		baseConfigFilePath: baseConfigFilePath,
 		configFilePath:     configFilePath,
 		configFileLock:     new(sync.Mutex),
+		scriptRunner:       scriptRunner,
 	}, nil
 }
 
@@ -40,7 +42,7 @@ func (h *Configurer) Configure(routingTable models.RoutingTable) error {
 	h.configFileLock.Lock()
 	defer h.configFileLock.Unlock()
 
-	err := h.createConfigBackup()
+	prev, err := h.createConfigBackup()
 	if err != nil {
 		return err
 	}
@@ -58,7 +60,7 @@ func (h *Configurer) Configure(routingTable models.RoutingTable) error {
 	}
 
 	for key, entry := range routingTable.Entries {
-		cfgContent, err = h.getListenConfiguration(key, entry, cfgContent)
+		cfgContent, err = h.getListenConfiguration(key, entry)
 		if err != nil {
 			continue
 		}
@@ -69,13 +71,22 @@ func (h *Configurer) Configure(routingTable models.RoutingTable) error {
 		}
 	}
 
-	return h.writeToConfig(buff.Bytes())
+	h.logger.Info("writing-config")
+	current := buff.Bytes()
+	err = h.writeToConfig(current)
+	if err != nil {
+		return err
+	}
+
+	// only call script if file changed
+	if h.scriptRunner != nil && !bytes.Equal(prev, current) {
+		h.logger.Info("running-script")
+		return h.scriptRunner.Run()
+	}
+	return nil
 }
 
-func (h *Configurer) getListenConfiguration(
-	key models.RoutingKey,
-	entry models.RoutingTableEntry,
-	cfgContent []byte) ([]byte, error) {
+func (h *Configurer) getListenConfiguration(key models.RoutingKey, entry models.RoutingTableEntry) ([]byte, error) {
 	var buff bytes.Buffer
 	_, err := buff.WriteString("\n")
 	if err != nil {
@@ -98,20 +109,20 @@ func (h *Configurer) getListenConfiguration(
 	return buff.Bytes(), nil
 }
 
-func (h *Configurer) createConfigBackup() error {
+func (h *Configurer) createConfigBackup() ([]byte, error) {
 	h.logger.Debug("reading-config-file", lager.Data{"config-file": h.configFilePath})
 	cfgContent, err := ioutil.ReadFile(h.configFilePath)
 	if err != nil {
 		h.logger.Error("failed-reading-base-config-file", err, lager.Data{"config-file": h.configFilePath})
-		return err
+		return nil, err
 	}
 	backupConfigFileName := fmt.Sprintf("%s.bak", h.configFilePath)
 	err = utils.WriteToFile(cfgContent, backupConfigFileName)
 	if err != nil {
 		h.logger.Error("failed-to-backup-config", err, lager.Data{"config-file": h.configFilePath})
-		return err
+		return nil, err
 	}
-	return nil
+	return cfgContent, nil
 }
 
 func (h *Configurer) writeToConfig(cfgContent []byte) error {
