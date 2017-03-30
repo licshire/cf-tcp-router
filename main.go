@@ -125,6 +125,12 @@ var defaultRouteExpiry = flag.Duration(
 	"The default ttl for a route",
 )
 
+var routerGroupName = flag.String(
+	"routerGroupName",
+	"",
+	"The name of the router group used to filter routes registered with this router.",
+)
+
 const (
 	dropsondeOrigin        = "tcp-router"
 	statsConnectionTimeout = 10 * time.Second
@@ -183,7 +189,15 @@ func main() {
 	logger.Debug("creating-routing-api-client", lager.Data{"api-location": routingAPIAddress})
 	routingAPIClient := routing_api.NewClient(routingAPIAddress, false)
 
-	updater := routing_table.NewUpdater(logger, &routingTable, configurer, routingAPIClient, uaaClient, clock, int(defaultRouteExpiry.Seconds()))
+	routerGroupGUID, err := getRouterGroupGUID(routingAPIClient, *routerGroupName)
+	if err != nil {
+		logger.Error("failed-getting-router-group", err)
+		os.Exit(1)
+	}
+	updater := routing_table.NewUpdater(
+		logger, &routingTable, routerGroupGUID, configurer,
+		routingAPIClient, uaaClient, clock, int(defaultRouteExpiry.Seconds()),
+	)
 
 	ticker := clock.NewTicker(*staleRouteCheckInterval)
 
@@ -272,4 +286,8 @@ func initializeDropsonde(logger lager.Logger) {
 	if err != nil {
 		logger.Error("failed-to-initialize-dropsonde", err)
 	}
+}
+
+func getRouterGroupGUID(routingAPIClient routing_api.Client, routerGroupGUID string) (string, error) {
+	return "", nil
 }
