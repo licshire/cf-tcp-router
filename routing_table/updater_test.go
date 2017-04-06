@@ -94,6 +94,31 @@ var _ = Describe("Updater", func() {
 			Expect(routingTable.Set(existingRoutingKey2, existingRoutingTableEntry2)).To(BeTrue())
 		})
 
+		Context("when event is for route with a different routerGroupGuid", func() {
+			BeforeEach(func() {
+				mapping := apimodels.NewTcpRouteMappingWithModificationTag(
+					"random-router-group-guid",
+					externalPort4,
+					"some-ip-4",
+					2346,
+					ttl,
+					modificationTag,
+				)
+
+				tcpEvent = routing_api.TcpEvent{
+					TcpRouteMapping: mapping,
+					Action:          "Upsert",
+				}
+			})
+
+			It("does nothing with the event", func() {
+				err := updater.HandleEvent(tcpEvent)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(fakeConfigurer.ConfigureCallCount()).To(Equal(0))
+			})
+		})
+
 		Context("when Upsert event is received", func() {
 			Context("when entry does not exist", func() {
 				BeforeEach(func() {

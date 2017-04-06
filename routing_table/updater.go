@@ -121,12 +121,11 @@ func (u *updater) Sync() {
 		// Create a new map and populate using tcp route mappings we got from routing api
 		u.routingTable.Entries = make(map[models.RoutingKey]models.RoutingTableEntry)
 		for _, routeMapping := range tcpRouteMappings {
-			if routeMapping.RouterGroupGuid != u.routerGroupGUID {
-				continue
+			if routeMapping.RouterGroupGuid == u.routerGroupGUID {
+				routingKey, backendServerInfo := u.toRoutingTableEntry(logger, routeMapping)
+				logger.Debug("creating-routing-table-entry", lager.Data{"key": routingKey, "value": backendServerInfo})
+				u.routingTable.UpsertBackendServerKey(routingKey, backendServerInfo)
 			}
-			routingKey, backendServerInfo := u.toRoutingTableEntry(logger, routeMapping)
-			logger.Debug("creating-routing-table-entry", lager.Data{"key": routingKey, "value": backendServerInfo})
-			u.routingTable.UpsertBackendServerKey(routingKey, backendServerInfo)
 		}
 	}
 }
@@ -146,6 +145,10 @@ func (u *updater) Syncing() bool {
 }
 
 func (u *updater) HandleEvent(event routing_api.TcpEvent) error {
+	if event.TcpRouteMapping.RouterGroupGuid != u.routerGroupGUID {
+		return nil
+	}
+
 	u.lock.Lock()
 	defer u.lock.Unlock()
 
@@ -193,10 +196,6 @@ func (u *updater) toRoutingTableEntry(logger lager.Logger, routeMapping apimodel
 }
 
 func (u *updater) handleUpsert(logger lager.Logger, routeMapping apimodels.TcpRouteMapping) error {
-	if routeMapping.RouterGroupGuid != u.routerGroupGUID {
-		return nil
-	}
-
 	routingKey, backendServerInfo := u.toRoutingTableEntry(logger, routeMapping)
 
 	if u.routingTable.UpsertBackendServerKey(routingKey, backendServerInfo) && !u.syncing {
@@ -208,10 +207,6 @@ func (u *updater) handleUpsert(logger lager.Logger, routeMapping apimodels.TcpRo
 }
 
 func (u *updater) handleDelete(logger lager.Logger, routeMapping apimodels.TcpRouteMapping) error {
-	if routeMapping.RouterGroupGuid != u.routerGroupGUID {
-		return nil
-	}
-
 	routingKey, backendServerInfo := u.toRoutingTableEntry(logger, routeMapping)
 
 	if u.routingTable.DeleteBackendServerKey(routingKey, backendServerInfo) && !u.syncing {

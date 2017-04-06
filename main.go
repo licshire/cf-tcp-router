@@ -125,12 +125,6 @@ var defaultRouteExpiry = flag.Duration(
 	"The default ttl for a route",
 )
 
-var routerGroupName = flag.String(
-	"routerGroupName",
-	"",
-	"The name of the router group used to filter routes registered with this router.",
-)
-
 const (
 	dropsondeOrigin        = "tcp-router"
 	statsConnectionTimeout = 10 * time.Second
@@ -189,7 +183,7 @@ func main() {
 	logger.Debug("creating-routing-api-client", lager.Data{"api-location": routingAPIAddress})
 	routingAPIClient := routing_api.NewClient(routingAPIAddress, false)
 
-	routerGroupGUID, err := getRouterGroupGUID(routingAPIClient, *routerGroupName)
+	routerGroupGUID, err := getRouterGroupGUID(logger, routingAPIClient, cfg.RouterGroupName)
 	if err != nil {
 		logger.Error("failed-getting-router-group", err)
 		os.Exit(1)
@@ -288,6 +282,16 @@ func initializeDropsonde(logger lager.Logger) {
 	}
 }
 
-func getRouterGroupGUID(routingAPIClient routing_api.Client, routerGroupGUID string) (string, error) {
-	return "", nil
+func getRouterGroupGUID(logger lager.Logger, routingAPIClient routing_api.Client, routerGroupName string) (string, error) {
+	rg, err := routingAPIClient.RouterGroupWithName(routerGroupName)
+	if err != nil {
+		logger.Fatal("fetching-router-group-failed", err)
+	}
+
+	if rg.Type != "tcp" {
+		logger.Fatal("expected-router-group-type-tcp", errors.New("router_group:"+routerGroupName))
+	}
+
+	logger.Info("retrieved-router-group", lager.Data{"router_group": routerGroupName, "router_group_guid": rg.Guid})
+	return rg.Guid, err
 }
