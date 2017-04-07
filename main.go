@@ -173,7 +173,7 @@ func main() {
 	uaaClient := newUaaClient(logger, cfg, clock)
 
 	// Check UAA connectivity
-	_, err = uaaClient.FetchKey()
+	token, err := uaaClient.FetchToken(true)
 	if err != nil {
 		logger.Error("failed-connecting-to-uaa", err)
 		os.Exit(1)
@@ -182,8 +182,17 @@ func main() {
 	routingAPIAddress := fmt.Sprintf("%s:%d", cfg.RoutingAPI.URI, cfg.RoutingAPI.Port)
 	logger.Debug("creating-routing-api-client", lager.Data{"api-location": routingAPIAddress})
 	routingAPIClient := routing_api.NewClient(routingAPIAddress, false)
+	routingAPIClient.SetToken(token.AccessToken)
 
-	updater := routing_table.NewUpdater(logger, &routingTable, configurer, routingAPIClient, uaaClient, clock, int(defaultRouteExpiry.Seconds()))
+	routerGroupGUID, err := getRouterGroupGUID(logger, routingAPIClient, cfg.RouterGroupName)
+	if err != nil {
+		logger.Error("failed-getting-router-group", err)
+		os.Exit(1)
+	}
+	updater := routing_table.NewUpdater(
+		logger, &routingTable, routerGroupGUID, configurer,
+		routingAPIClient, uaaClient, clock, int(defaultRouteExpiry.Seconds()),
+	)
 
 	ticker := clock.NewTicker(*staleRouteCheckInterval)
 
@@ -272,4 +281,14 @@ func initializeDropsonde(logger lager.Logger) {
 	if err != nil {
 		logger.Error("failed-to-initialize-dropsonde", err)
 	}
+}
+
+func getRouterGroupGUID(logger lager.Logger, routingAPIClient routing_api.Client, routerGroupName string) (string, error) {
+	rg, err := routingAPIClient.RouterGroupWithName(routerGroupName)
+	if err != nil {
+		logger.Fatal("fetching-router-group-failed", err)
+	}
+
+	logger.Info("retrieved-router-group", lager.Data{"router_group": routerGroupName, "router_group_guid": rg.Guid})
+	return rg.Guid, err
 }

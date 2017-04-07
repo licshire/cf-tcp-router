@@ -23,9 +23,10 @@ type OAuthConfig struct {
 }
 
 type Config struct {
-	OAuth          OAuthConfig      `yaml:"oauth"`
-	RoutingAPI     RoutingAPIConfig `yaml:"routing_api"`
-	HaProxyPidFile string           `yaml:"haproxy_pid_file"`
+	OAuth           OAuthConfig      `yaml:"oauth"`
+	RoutingAPI      RoutingAPIConfig `yaml:"routing_api"`
+	HaProxyPidFile  string           `yaml:"haproxy_pid_file"`
+	RouterGroupName string           `yaml:"router_group"`
 }
 
 func New(path string) (*Config, error) {
@@ -49,6 +50,9 @@ func (c *Config) initConfigFromFile(path string) error {
 
 	if c.HaProxyPidFile == "" {
 		return errors.New("haproxy_pid_file is required")
+	}
+	if c.RouterGroupName == "" {
+		return errors.New("router_group is required")
 	}
 	return nil
 }

@@ -24,6 +24,7 @@ type Updater interface {
 type updater struct {
 	logger           lager.Logger
 	routingTable     *models.RoutingTable
+	routerGroupGUID  string
 	configurer       configurer.RouterConfigurer
 	syncing          bool
 	routingAPIClient routing_api.Client
@@ -34,11 +35,20 @@ type updater struct {
 	defaultTTL       int
 }
 
-func NewUpdater(logger lager.Logger, routingTable *models.RoutingTable, configurer configurer.RouterConfigurer,
-	routingAPIClient routing_api.Client, uaaClient uaaclient.Client, klock clock.Clock, defaultTTL int) Updater {
+func NewUpdater(
+	logger lager.Logger,
+	routingTable *models.RoutingTable,
+	routerGroupGUID string,
+	configurer configurer.RouterConfigurer,
+	routingAPIClient routing_api.Client,
+	uaaClient uaaclient.Client,
+	klock clock.Clock,
+	defaultTTL int,
+) Updater {
 	return &updater{
 		logger:           logger,
 		routingTable:     routingTable,
+		routerGroupGUID:  routerGroupGUID,
 		configurer:       configurer,
 		lock:             new(sync.Mutex),
 		syncing:          false,
@@ -111,9 +121,11 @@ func (u *updater) Sync() {
 		// Create a new map and populate using tcp route mappings we got from routing api
 		u.routingTable.Entries = make(map[models.RoutingKey]models.RoutingTableEntry)
 		for _, routeMapping := range tcpRouteMappings {
-			routingKey, backendServerInfo := u.toRoutingTableEntry(logger, routeMapping)
-			logger.Debug("creating-routing-table-entry", lager.Data{"key": routingKey, "value": backendServerInfo})
-			u.routingTable.UpsertBackendServerKey(routingKey, backendServerInfo)
+			if routeMapping.RouterGroupGuid == u.routerGroupGUID {
+				routingKey, backendServerInfo := u.toRoutingTableEntry(logger, routeMapping)
+				logger.Debug("creating-routing-table-entry", lager.Data{"key": routingKey, "value": backendServerInfo})
+				u.routingTable.UpsertBackendServerKey(routingKey, backendServerInfo)
+			}
 		}
 	}
 }
@@ -133,6 +145,10 @@ func (u *updater) Syncing() bool {
 }
 
 func (u *updater) HandleEvent(event routing_api.TcpEvent) error {
+	if event.TcpRouteMapping.RouterGroupGuid != u.routerGroupGUID {
+		return nil
+	}
+
 	u.lock.Lock()
 	defer u.lock.Unlock()
 

@@ -95,7 +95,7 @@ var _ = Describe("Main", func() {
 		return process
 	}
 
-	generateConfigFile := func(oauthServerPort, routingApiServerPort string, routingApiAuthDisabled bool) string {
+	generateConfigFile := func(oauthServerPort, routingApiServerPort string, routingApiAuthDisabled bool, routerGroupName string) string {
 		randomConfigFileName := testutil.RandomFileName("tcp_router", ".yml")
 		configFile := path.Join(os.TempDir(), randomConfigFileName)
 
@@ -112,8 +112,9 @@ routing_api:
   uri: http://127.0.0.1
   port: %s
 haproxy_pid_file: %s
+router_group: %s
 `
-		cfg := fmt.Sprintf(cfgString, "fixtures/certs/uaa-ca.pem", oauthServerPort, routingApiAuthDisabled, routingApiServerPort, longRunningProcessPidFile)
+		cfg := fmt.Sprintf(cfgString, "fixtures/certs/uaa-ca.pem", oauthServerPort, routingApiAuthDisabled, routingApiServerPort, longRunningProcessPidFile, routerGroupName)
 
 		err := utils.WriteToFile([]byte(cfg), configFile)
 		Expect(err).ShouldNot(HaveOccurred())
@@ -156,7 +157,7 @@ haproxy_pid_file: %s
 			oauthServer = oAuthServer(logger)
 			server = routingApiServer(logger)
 			oauthServerPort := getServerPort(oauthServer.URL())
-			configFile := generateConfigFile(oauthServerPort, fmt.Sprintf("%d", routingAPIPort), false)
+			configFile := generateConfigFile(oauthServerPort, fmt.Sprintf("%d", routingAPIPort), false, "default-tcp")
 			tcpRouterArgs := testrunner.Args{
 				BaseLoadBalancerConfigFilePath: haproxyBaseConfigFile,
 				LoadBalancerConfigFilePath:     haproxyConfigFile,
@@ -217,7 +218,6 @@ haproxy_pid_file: %s
 			Eventually(session.Out, 10*time.Second, 1*time.Second).Should(gbytes.Say("prune-stale-routes.completed"))
 			verifyHaProxyConfigContent(haproxyConfigFile, newServerConfigEntry, false)
 		})
-
 	})
 
 	Context("Oauth server is down", func() {
@@ -241,7 +241,7 @@ haproxy_pid_file: %s
 
 		Context("routing api auth is enabled", func() {
 			BeforeEach(func() {
-				configFile = generateConfigFile(oauthServerPort, fmt.Sprintf("%d", routingAPIPort), false)
+				configFile = generateConfigFile(oauthServerPort, fmt.Sprintf("%d", routingAPIPort), false, "default-tcp")
 				tcpRouterArgs = testrunner.Args{
 					BaseLoadBalancerConfigFilePath: haproxyBaseConfigFile,
 					LoadBalancerConfigFilePath:     haproxyConfigFile,
@@ -257,7 +257,7 @@ haproxy_pid_file: %s
 
 		Context("routing api auth is disabled", func() {
 			BeforeEach(func() {
-				configFile = generateConfigFile(oauthServerPort, fmt.Sprintf("%d", routingAPIPort), true)
+				configFile = generateConfigFile(oauthServerPort, fmt.Sprintf("%d", routingAPIPort), true, "default-tcp")
 				tcpRouterArgs = testrunner.Args{
 					BaseLoadBalancerConfigFilePath: haproxyBaseConfigFile,
 					LoadBalancerConfigFilePath:     haproxyConfigFile,
@@ -276,7 +276,7 @@ haproxy_pid_file: %s
 		BeforeEach(func() {
 			oauthServer = oAuthServer(logger)
 			oauthServerPort := getServerPort(oauthServer.URL())
-			configFile := generateConfigFile(oauthServerPort, fmt.Sprintf("%d", routingAPIPort), false)
+			configFile := generateConfigFile(oauthServerPort, fmt.Sprintf("%d", routingAPIPort), false, "default-tcp")
 			tcpRouterArgs := testrunner.Args{
 				BaseLoadBalancerConfigFilePath: haproxyBaseConfigFile,
 				LoadBalancerConfigFilePath:     haproxyConfigFile,
@@ -289,21 +289,9 @@ haproxy_pid_file: %s
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("keeps trying to connect and doesn't blow up", func() {
-			Eventually(session.Out, 5*time.Second).Should(gbytes.Say("Subscribing-to-routing-api-event-stream"))
-			Consistently(session.Exited).ShouldNot(BeClosed())
-			Consistently(session.Out, 5*time.Second).ShouldNot(gbytes.Say("Successfully-subscribed-to-routing-api-event-stream"))
-			By("starting routing api server")
-			server = routingApiServer(logger)
-			Eventually(session.Out, 5*time.Second).Should(gbytes.Say("Successfully-subscribed-to-routing-api-event-stream"))
-			tcpRouteMapping := models.NewTcpRouteMapping(routerGroupGuid, 5222, "some-ip-3", 61000, 120)
-			err := routingApiClient.UpsertTcpRouteMappings([]models.TcpRouteMapping{tcpRouteMapping})
-			Expect(err).ToNot(HaveOccurred())
-			Eventually(session.Out, 5*time.Second).Should(gbytes.Say("handle-event.finished"))
-			expectedConfigEntry := "\nlisten listen_cfg_5222\n  mode tcp\n  bind :5222\n"
-			verifyHaProxyConfigContent(haproxyConfigFile, expectedConfigEntry, true)
-			newServerConfigEntry := "server server_some-ip-3_61000 some-ip-3:61000"
-			verifyHaProxyConfigContent(haproxyConfigFile, newServerConfigEntry, true)
+		It("exits", func() {
+			Eventually(session.Out, 5*time.Second).Should(gbytes.Say("fetching-router-group-failed"))
+			Eventually(session.Exited).Should(BeClosed())
 		})
 	})
 
@@ -312,7 +300,7 @@ haproxy_pid_file: %s
 			oauthServer = oAuthServer(logger)
 			server = routingApiServer(logger)
 			oauthServerPort := getServerPort(oauthServer.URL())
-			configFile := generateConfigFile(oauthServerPort, fmt.Sprintf("%d", routingAPIPort), false)
+			configFile := generateConfigFile(oauthServerPort, fmt.Sprintf("%d", routingAPIPort), false, "default-tcp")
 			tcpRouterArgs := testrunner.Args{
 				BaseLoadBalancerConfigFilePath: haproxyBaseConfigFile,
 				LoadBalancerConfigFilePath:     haproxyConfigFile,
@@ -337,6 +325,32 @@ haproxy_pid_file: %s
 			killLongRunningProcess()
 
 			Eventually(session.Exited, "5s").Should(BeClosed())
+		})
+	})
+
+	Context("when given router group name does not exist", func() {
+		BeforeEach(func() {
+			var err error
+
+			oauthServer = oAuthServer(logger)
+			server = routingApiServer(logger)
+			oauthServerPort := getServerPort(oauthServer.URL())
+			configFile := generateConfigFile(oauthServerPort, fmt.Sprintf("%d", routingAPIPort), false, "non-existent-router-group")
+			tcpRouterArgs := testrunner.Args{
+				BaseLoadBalancerConfigFilePath: haproxyBaseConfigFile,
+				LoadBalancerConfigFilePath:     haproxyConfigFile,
+				ConfigFilePath:                 configFile,
+			}
+
+			allOutput := logger.Buffer()
+			runner := testrunner.New(tcpRouterPath, tcpRouterArgs)
+			session, err = gexec.Start(runner.Command, allOutput, allOutput)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("exits", func() {
+			Eventually(session.Out, 5*time.Second).Should(gbytes.Say("fetching-router-group-failed"))
+			Eventually(session.Exited).Should(BeClosed())
 		})
 	})
 })
